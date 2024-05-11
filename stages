@@ -1,0 +1,829 @@
+`timescale 1ns / 1ps
+//////////////////////////////////////////////////////////////////////////////////
+// Company: 
+// Engineer: 
+// 
+// Create Date: 03/13/2024 07:58:56 AM
+// Designer Name: Aaron Amspacker 
+// Module Name: design 
+// Project Name: project
+// Target Devices: 
+// Tool Versions: 
+// Description: 
+// 
+// Dependencies: 
+// 
+// Revision:
+// Revision 0.01 - File Created
+// Additional Comments:
+// 
+
+
+//pc should be set to 100 in an intial statement
+//pc is set to value of nextPc
+//pc should be set to 100 in an intial statement
+//pc is set to value of nextPc
+//PC Module
+module Program_counter(
+    input [31:0] nextPc,
+    input clk,
+    output reg [31:0] pc
+    );
+    
+    initial begin
+        pc = 100;
+    end
+   
+    always @ (posedge clk) begin
+        pc = nextPc;
+    end   
+endmodule
+
+//memory (implemented as 2D reg array)
+//instOut is set to value of memory array at position pc
+module Instruction_memory(
+    input [31:0] pc,
+
+    output reg [31:0] instOut
+    );
+    
+
+    reg [31:0] memory [0:63];
+    
+    initial begin
+       
+        
+        //Project Addition-changes
+        memory[25] = {6'b000000, 5'b00001, 5'b00010, 5'b00011, 5'b00000, 6'b100000};
+        memory[26] = {6'b000000, 5'b01001, 5'b00011, 5'b00100, 5'b00000, 6'b100010};
+        memory[27] = {6'b000000, 5'b00011, 5'b01001, 5'b00101, 5'b00000, 6'b100101};
+        memory[28] = {6'b000000, 5'b00011, 5'b01001, 5'b00110, 5'b00000, 6'b100110};
+        memory[29] = {6'b000000, 5'b00011, 5'b01001, 5'b00111, 5'b00000, 6'b100100};
+    
+    end
+    
+
+    always @ (pc) begin
+    
+        instOut = memory[pc[7:2]];
+    end
+   
+endmodule
+
+//nextPc is set to pc + 4
+module pc_Adder(
+ 
+    input [31:0] pc,
+    
+
+    output reg [31:0] nextPc
+    );
+    
+    always @ (pc) begin
+        nextPc = pc + 4;
+    end
+   
+endmodule
+
+//dinstOut is set to instOut
+module IFIDPipelineRegister(
+
+    input [31:0] instOut,
+    input clk,
+    
+
+    output reg [31:0] dinstOut
+    );
+    
+    
+    
+    always @(posedge clk) begin
+    
+        
+        dinstOut = instOut;
+    end
+    
+endmodule
+
+//all outputs are assigned based on the values of op and func
+module Control_unit(
+    input [31:26] op,
+    input [5:0] func,
+    input [4:0] mdestReg,
+    input mm2reg,
+    input mwreg,
+    input [4:0] edestReg,
+    input em2reg,
+    input ewreg,
+    input [25:21] rs,
+    input [20:16] rt,
+    output reg wreg,
+    output reg m2reg,
+    output reg wmem,
+    output reg [3:0] aluc,
+    output reg aluimm,
+    output reg regrt,
+
+    output reg [1:0] fwda,
+    output reg [1:0] fwdb
+    );
+    
+
+    always @ (*) begin
+    
+    fwda = 0;
+    fwdb = 0;
+    
+    if((ewreg == 1) && (em2reg == 0)) begin
+        if(edestReg == rs) begin
+            fwda = 1;
+            end
+        if(edestReg == rt) begin
+            fwdb = 1;
+            end
+    end
+    
+     if((mwreg == 1) && (mm2reg == 0)) begin
+        if(mdestReg == rs) begin
+            fwda = 2;
+            end
+        if(mdestReg == rt) begin
+            fwdb = 2;
+            end
+      end
+      
+     if((mwreg == 1) && (mm2reg == 1)) begin
+        if(mdestReg == rs) begin
+            fwda = 3;
+            end
+        if(mdestReg == rt) begin
+            fwdb = 3;
+            end  
+     end
+        
+    case(op)
+    6'b00000: begin
+              case(func)
+              //Addition Operation
+              6'b100000: begin
+                        wreg = 1;
+                        m2reg = 0;
+                        wmem = 0;
+                        aluc = 2;
+                        aluimm = 0;
+                        regrt = 0;
+                        end
+              //Subtract Operation     
+              6'b100010: begin
+                        wreg = 1;
+                        m2reg = 0;
+                        wmem = 0;
+                        aluc = 6;
+                        aluimm = 0;
+                        regrt = 0;
+                        end
+               //OR Operation       
+              6'b100101: begin
+                         wreg = 1;
+                         m2reg = 0;
+                         wmem = 0;
+                         aluc = 1;
+                         aluimm = 0;
+                         regrt = 0;
+                         end
+              //XOR Operation       
+              6'b100110: begin
+                         wreg = 1;
+                         m2reg = 0;
+                         wmem = 0;
+                         aluc = 3;
+                         aluimm = 0;
+                         regrt = 0;
+                         end
+                         
+              //AND Operation
+              6'b100100: begin
+                         wreg = 1;
+                         m2reg = 0;
+                         wmem = 0;
+                         aluc = 0;
+                         aluimm = 0;
+                         regrt = 0;
+                         end           
+              endcase
+              end
+     //lw instruction
+     6'b100011: begin
+                wreg = 1;
+                m2reg = 1;
+                wmem = 0;
+                aluc = 2;
+                aluimm = 1;
+                regrt = 1;
+                end
+     endcase
+    end
+    
+endmodule
+
+//if regrt is 0, destReg is set to the value of rd
+//if regrt is 1, destReg is set to the value of rt
+module regrtMultiplexer(
+    input [20:16] rt,
+    input [15:11] rd,
+    input regrt,
+
+    output reg [4:0] destReg
+    );
+    
+
+    always @ (rt, rd, regrt) begin
+        case(regrt)
+            0: destReg = rd;
+            1: destReg = rt;
+        endcase
+    end
+    
+endmodule
+
+//qa is set to value of register at address rs
+//qb is set to value of register at address rt
+//if wwreg is 1, register at position wdestReg is set to wbData
+module registerFile(
+
+
+    input [25:21] rs,
+    input [20:16] rt,
+    
+
+  
+    input [4:0] wdestReg,
+    input [31:0] wbData,
+    input wwreg,
+    input clk,
+
+    output reg [31:0] qa,
+    output reg [31:0] qb
+    );
+    
+
+    reg [31:0] registers [0:31];
+    
+ 
+    initial begin
+        registers[0] = 0;
+        registers[1] = 32'hA00000AA;
+        registers[2] = 32'h10000011;
+        registers[3] = 32'h20000022;
+        registers[4] = 32'h30000033;
+        registers[5] = 32'h40000044;
+        registers[6] = 32'h50000055;
+        registers[7] = 32'h60000066;
+        registers[8] = 32'h70000077;
+        registers[9] = 32'h80000088;
+        registers[10] = 32'h90000099;
+        registers[11] = 0;
+        registers[12] = 0;
+        registers[13] = 0;
+        registers[14] = 0;
+        registers[15] = 0;
+        registers[16] = 0;
+        registers[17] = 0;
+        registers[18] = 0;
+        registers[19] = 0;
+        registers[20] = 0;
+        registers[21] = 0;
+        registers[22] = 0;
+        registers[23] = 0;
+        registers[24] = 0;
+        registers[25] = 0;
+        registers[26] = 0;
+        registers[27] = 0;
+        registers[28] = 0;
+        registers[29] = 0;
+        registers[30] = 0;
+        registers[31] = 0;
+    end
+    
+ 
+    always @(*) begin
+        qa = registers[rs];
+        qb = registers[rt];
+    end
+    
+  
+    always @ (negedge clk) begin
+        case(wwreg)
+            1: registers[wdestReg] = wbData;
+        endcase
+    end
+    
+endmodule
+
+
+module immediateExtender(
+
+    input [15:0] imm,
+    
+    output reg [31:0] imm32
+    );
+    
+    always @ (imm) begin
+    
+        case(imm[15])
+   
+            0: imm32 = {16'b0000000000000000, imm};  
+            1: imm32 = {16'b1111111111111111, imm};
+        endcase
+    end
+    
+endmodule
+
+//ewreg set to value of wreg
+//em2reg det to vale of m2reg
+//ewmem set to value of wmem
+//ealuc set to value of aluc
+//ealuimm set to value aluimm
+//edestReg set to value of destReg
+//eqa set to value of qa
+//eqb set to value of qb
+//eimm32 set to value of imm32
+module IDEXEPipelineRegister(
+    input wreg,
+    input m2reg,
+    input wmem,
+    input [3:0] aluc,
+    input aluimm,
+    input [4:0] destReg,
+    input [31:0] qa,
+    input [31:0] qb,
+    input [31:0] imm32,
+    input clk,
+
+    output reg ewreg,
+    output reg em2reg,
+    output reg ewmem,
+    output reg [3:0] ealuc,
+    output reg ealuimm,
+    output reg [4:0] edestReg,
+    output reg [31:0] eqa,
+    output reg [31:0] eqb,
+    output reg [31:0] eimm32
+    );
+    
+
+    always @ (posedge clk) begin
+        ewreg = wreg;
+        em2reg = m2reg;
+        ewmem = wmem;
+        ealuc = aluc;
+        ealuimm = aluimm;
+        edestReg = destReg;
+        eqa = qa;
+        eqb = qb;
+        eimm32 = imm32;
+    end
+    
+endmodule
+
+
+
+//if ealuimm is 0, b is set to value of eqb
+//if ealuimm is 1, b is set to value of eimm32
+module ALU_Mux(
+
+    input [31:0] eqb,
+    input [31:0] eimm32,
+    input ealuimm,
+    
+    output reg [31:0] b
+    );
+
+    always @ (eqb, eimm32, ealuimm) begin
+        case(ealuimm)
+            0: b = eqb;
+            1: b = eimm32;
+        endcase
+    end
+    
+endmodule
+
+//the computation of eqa and b through the operation indicated by ealuc is performed, with r being set to the result of this calculation    
+module Alu(
+    input [31:0] eqa,
+    input [31:0] b,
+    input [3:0] ealuc,
+
+    output reg [31:0] r
+    );
+
+    always @ (*) begin
+        case(ealuc)
+        //Addition
+        2: r = eqa  + b;
+        //Project
+        //Subtraction
+        6: r = eqa - b;
+        //OR
+        1: r = eqa | b;
+        //XOR
+        3: r = eqa ^ b;
+        //AND
+        0: r = eqa & b;
+        endcase
+    end
+
+endmodule
+
+//mwreg set to value of ewreg
+//mm2reg set to value of em2reg
+//mwmem set to value of ewmem
+//mdestReg set to value of edestReg
+//mr set to value of r
+//mqb is set to value of eqb
+module EXEMEM_Pipeline_Register(
+    input ewreg,
+    input em2reg,
+    input ewmem,
+    input [4:0] edestReg,
+    input [31:0] r,
+    input [31:0] eqb,
+    input clk,
+
+    output reg mwreg,
+    output reg mm2reg,
+    output reg mwmem,
+    output reg [4:0] mdestReg,
+    output reg [31:0] mr,
+    output reg [31:0] mqb
+);
+
+    always @ (posedge clk) begin
+        mwreg = ewreg;
+        mm2reg = em2reg;
+        mwmem = ewmem;
+        mdestReg = edestReg;
+        mr = r;
+        mqb = eqb;
+    end
+
+endmodule
+
+//memory (implemented as 20 reg array)
+//mdo is set to value of memory array at position mr
+//If mwmem is 1 , memory array at position mr is set to mqb
+module Data_Memory(
+    input [31:0] mr,
+    input [31:0] mqb,
+    input mwmem,
+    input clk,
+    
+    output reg [31:0] mdo
+    );
+
+    reg [31:0] memory2 [0:63];
+
+    initial begin
+        memory2[0] = {32'hA00000AA};
+        memory2[1] = {32'h10000011};
+        memory2[2] = {32'h20000022};
+        memory2[3] = {32'h30000033};
+        memory2[4] = {32'h40000044};
+        memory2[5] = {32'h50000055};
+        memory2[6] = {32'h60000066};
+        memory2[7] = {32'h70000077};
+        memory2[8] = {32'h80000088};
+        memory2[9] = {32'h90000099};
+    end
+
+    always @ (mr, mqb, mwmem, clk) begin
+        mdo = memory2[mr[31:2]];
+    end
+    
+    always @ (negedge clk) begin
+        case(mwmem)
+            1: memory2[mr[31:2]] = mqb;
+        endcase
+    end
+
+endmodule
+
+//wwreg set to value of mwreg
+//wm2reg set to value of mm2reg
+//wdestReg set to value of mdestReg
+//wr set to value of mr 
+//wdo set to value of mdo
+module MEMWB_Pipeline_Register(
+    input mwreg,
+    input mm2reg,
+    input [4:0] mdestReg,
+    input [31:0] mr,
+    input [31:0] mdo,
+    input clk,
+
+    output reg wwreg,
+    output reg wm2reg,
+    output reg [4:0] wdestReg,
+    output reg [31:0] wr,
+    output reg [31:0] wdo
+    );
+    
+
+    always @ (posedge clk) begin
+        wwreg = mwreg;
+        wm2reg = mm2reg;
+        wdestReg = mdestReg;
+        wr = mr;
+        wdo = mdo;
+    end
+
+endmodule
+
+
+//if wm2reg is 0, wbData is set to value of wr
+//if wm2reg is 1, wbData is set to value of wdo
+module WBMux(
+
+    input [31:0] wr,
+    input [31:0] wdo,
+    input wm2reg,
+    
+    output reg [31:0] wbData
+);
+
+    always @ (wr, wdo, wm2reg) begin
+        case(wm2reg)
+            0: wbData = wr;
+            1: wbData = wdo;
+        endcase
+    end
+
+endmodule
+
+
+// selects one of the four input signals qa, r, mr, mdo based on the value of the select signal fwda.
+// forwards the selected input to the output fqa.
+module muxfwda(
+    input [31:0] qa,
+    input [31:0] r,
+    input [31:0] mr,
+    input [31:0] mdo,
+    input [1:0] fwda,
+    
+    output reg [31:0] fqa
+);
+
+
+    always @ (*) begin
+        case(fwda)
+            2'b00: fqa = qa;
+            2'b01: fqa = r;
+            2'b10: fqa = mr;
+            2'b11: fqa = mdo;
+        endcase
+    end
+
+endmodule
+
+
+// selects one of the four input signals (qb, r, mr, mdo) based on the value of the select signal fwdb.
+// forwards the selected input to the output fqb.
+module muxfwdb(
+    input [31:0] qb,
+    input [31:0] r,
+    input [31:0] mr,
+    input [31:0] mdo,
+    input [1:0] fwdb,
+    output reg [31:0] fqb
+);
+    
+    always @ (*) begin
+        case(fwdb)
+            2'b00: fqb = qb;
+            2'b01: fqb = r;
+            2'b10: fqb = mr;
+            2'b11: fqb = mdo;
+        endcase
+    end
+
+endmodule
+
+//contains all modules needed to connect cpu together 
+//exposes parts of the module for the test bench
+module Datapath(
+    input clk,
+    output [31:0] pc,
+    output [31:0] dinstOut,
+    output ewreg,
+    output em2reg,
+    output ewmem,
+    output [3:0] ealuc,
+    output ealuimm,
+    output [4:0] edestReg,
+    output [31:0] eqa,
+    output [31:0] eqb,
+    output [31:0] eimm32,
+    output mwreg,
+    output mm2reg,
+    output mwmem,
+    output [4:0] mdestReg,
+    output [31:0] mr,
+    output [31:0] mqb,
+    output wwreg,
+    output wm2reg,
+    output [4:0] wdestReg,
+    output [31:0] wr,
+    output [31:0] wdo
+    );
+    wire [31:0] nextPc;
+    wire [31:0] instOut;
+    wire wreg;
+    wire m2reg;
+    wire wmem;
+    wire [3:0] aluc;
+    wire aluimm;
+    wire regrt;
+    wire [4:0] destReg;
+    wire [31:0] qa;
+    wire [31:0] qb;
+    wire [31:0] imm32;
+    wire [31:0] b;
+    wire [31:0] r;
+    wire [31:0] mdo;
+    wire [31:0] wbData;
+    wire [1:0] fwda;
+    wire [1:0] fwdb;
+    wire [31:0] fqa;
+    wire [31:0] fqb;
+    
+    Program_counter pcinstant(
+    nextPc,
+    clk,
+    pc
+    );
+    
+    Instruction_memory iminstant(
+    pc,
+    instOut
+    );
+    
+    pc_Adder pcainstant(
+    pc,
+    nextPc
+    );
+    
+    IFIDPipelineRegister ifdinstant(
+    instOut,
+    clk,
+    dinstOut
+    );
+    
+    Control_unit cuinstant(
+    dinstOut[31:26],
+    dinstOut[5:0],
+    //Project 
+    mdestReg,
+    mm2reg,
+    mwreg,
+    edestReg,
+    em2reg,
+    ewreg,
+    dinstOut[25:21],
+    dinstOut[20:16],
+    wreg,
+    m2reg,
+    wmem,
+    aluc,
+    aluimm,
+    regrt,
+    //Project Addition
+    fwda,
+    fwdb
+    );
+    
+    regrtMultiplexer rminstant(
+    dinstOut[20:16],
+    dinstOut[15:11],
+    regrt,
+    destReg
+    );
+    
+    registerFile rfinstant(
+    dinstOut[25:21],
+    dinstOut[20:16],
+ 
+    wdestReg,
+    wbData,
+    wwreg,
+    clk,
+    qa,
+    qb
+    );
+    
+    immediateExtender ieinstant(
+    dinstOut[15:0],
+    imm32
+    );
+    
+    IDEXEPipelineRegister idexeinstant(
+    wreg,
+    m2reg,
+    wmem,
+    aluc,
+    aluimm,
+    destReg,
+    fqa,
+    fqb,
+    imm32,
+    clk,
+    ewreg,
+    em2reg,
+    ewmem,
+    ealuc,
+    ealuimm,
+    edestReg,
+    eqa,
+    eqb,
+    eimm32
+    );
+    
+    
+    ALU_Mux alumuxinstant(
+    eqb,
+    eimm32,
+    ealuimm,
+    b
+    );
+    
+    Alu aluinstant(
+    eqa,
+    b,
+    ealuc,
+    r
+    );
+    
+    EXEMEM_Pipeline_Register exememreginstant(
+    ewreg,
+    em2reg,
+    ewmem,
+    edestReg,
+    r,
+    eqb,
+    clk,
+    mwreg,
+    mm2reg,
+    mwmem,
+    mdestReg,
+    mr,
+    mqb
+    );
+    
+    Data_Memory datamemoryinstant(
+    mr,
+    mqb,
+    mwmem,
+    clk,
+    mdo
+    );
+    
+    MEMWB_Pipeline_Register memwbreginstant(
+    mwreg,
+    mm2reg,
+    mdestReg,
+    mr,
+    mdo,
+    clk,
+    wwreg,
+    wm2reg,
+    wdestReg,
+    wr,
+    wdo
+    );
+    
+   
+    WBMux WbMuxinstant(
+    wr,
+    wdo,
+    wm2reg,
+    wbData
+    );
+    
+    
+    muxfwda MuxFwdainstant(
+    qa,
+    r,
+    mr,
+    mdo,
+    fwda,
+    fqa
+    );
+    
+    muxfwdb MuxFwdbinstant(
+    qb,
+    r,
+    mr,
+    mdo,
+    fwdb,
+    fqb
+    );
+endmodule
